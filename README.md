@@ -31,11 +31,41 @@ Features:
 - Configurable password in code
 - Easy to port to other STM32 boards
 
+---
+
+## 🖥️ How to Build and Flash
+
+1. Open the project in **STM32CubeIDE**
+2. Connect your Nucleo board via USB
+3. Click **Build → Build Project**
+4. Click **Run → Debug or Run**
+5. Observe real-time operation on your hardware
+
+---
+
+## 🧠 How It Works
+
+1. Press `*` → system starts listening for password input.  
+2. Enter 4 digits → each shown on one of the four 7-segment displays.  
+3. Press `*` again to verify.  
+   - ✅ Correct → green LED turns on.  
+   - ❌ Incorrect → red LED + buzzer for 2 seconds.  
+4. You can restart anytime by pressing `#` or `*`.
+
+---
+
+## 🔬 Technical Notes
+
+- Display multiplexing handled manually in software loop.
+- Each digit controlled individually via GPIO pins.
+- Debouncing achieved by short delay per keypress.
+- FSM ensures non-blocking transitions between states.
+
+---
+
 Author:
-Raymundo Gómez
+Raymundo
 Robotics and Digital Systems Engineer – Tecnológico de Monterrey
-Currently in Korea for academic exchange
-Passionate about embedded systems, robotics, and intelligent automation.
 
 License:
 Distributed under the MIT License.
