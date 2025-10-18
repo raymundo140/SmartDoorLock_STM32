@@ -1,0 +1,43 @@
+#include "stm32h5xx.h"
+#include "uart.h"
+
+#define USART_1  1
+#define USARTDIV_64MHZ  (64000000 / 115200)  // assuming 64 MHz clock
+
+void USER_USART_Init(uint8_t USART)
+{
+    if (USART == USART_1)
+    {
+        // Enable clocks
+        RCC->AHB2ENR |= RCC_AHB2ENR_GPIOBEN;   // ✅ Enable GPIOB clock
+        RCC->APB2ENR |= RCC_APB2ENR_USART1EN;  // ✅ Enable USART1 clock
+
+        // Configure PB14 as USART1_TX (AF7)
+        GPIOB->MODER &= ~(3 << (14 * 2));
+        GPIOB->MODER |=  (2 << (14 * 2));               // Alternate function
+        GPIOB->AFR[1] &= ~(0xF << ((14 - 8) * 4));
+        GPIOB->AFR[1] |=  (7 << ((14 - 8) * 4));         // AF7 for USART1_TX
+
+        // Configure PB15 as USART1_RX (AF7)
+        GPIOB->MODER &= ~(3 << (15 * 2));
+        GPIOB->MODER |=  (2 << (15 * 2));
+        GPIOB->AFR[1] &= ~(0xF << ((15 - 8) * 4));
+        GPIOB->AFR[1] |=  (7 << ((15 - 8) * 4));         // AF7 for USART1_RX
+
+        // Configure USART1: 8N1
+        USART1->CR1 = 0;
+        USART1->CR1 |= USART_CR1_TE | USART_CR1_RE;     // Enable TX/RX
+        USART1->BRR = USARTDIV_64MHZ;                   // Baud rate
+        USART1->CR1 |= USART_CR1_UE;                    // Enable USART
+    }
+}
+
+int _write(int file, char *ptr, int len)
+{
+    for (int i = 0; i < len; i++)
+    {
+        while (!(USART1->ISR & USART_ISR_TXE)); // Wait until TX buffer empty
+        USART1->TDR = ptr[i];                   // Send character
+    }
+    return len;
+}

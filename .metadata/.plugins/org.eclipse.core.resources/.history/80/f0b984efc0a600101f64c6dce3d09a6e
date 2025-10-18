@@ -1,0 +1,22 @@
+/*
+ * microcontroller.h
+ *
+ *  Created on: 02/25 2022
+ *  Modified by (list): Ye gu Kang
+ */
+
+#ifndef MICROCONTROLLER_H_
+#define MICROCONTROLLER_H_
+
+
+
+
+// Function prototypes
+void microcontroller(const double * adc, double * dac);
+void init_software(void);
+
+// Constant definitions
+#define TS (1e-4)
+
+
+#endif /* MICROCONTROLLER_H_ */

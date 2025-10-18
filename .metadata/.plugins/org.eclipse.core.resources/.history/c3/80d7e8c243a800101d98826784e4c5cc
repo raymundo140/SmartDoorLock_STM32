@@ -1,0 +1,252 @@
+/* USER CODE BEGIN Header */
+/**
+  ******************************************************************************
+  * @file           : main.c
+  * @brief          : Smart Lock System (STM32 + Keypad + 7-Segment)
+  ******************************************************************************
+  */
+/* USER CODE END Header */
+/* Includes ------------------------------------------------------------------*/
+#include "main.h"
+#include <string.h>
+
+/* USER CODE BEGIN Includes */
+#include "matrix_keypad.h"
+/* USER CODE END Includes */
+
+/* Private variables ---------------------------------------------------------*/
+TIM_HandleTypeDef htim1;
+
+/* USER CODE BEGIN PV */
+// Segment map (0-9 and "-")
+uint8_t segmentMap[11] = {
+    0b11111100, // 0
+    0b01100000, // 1
+    0b11011010, // 2
+    0b11110010, // 3
+    0b01100110, // 4
+    0b10110110, // 5
+    0b10111110, // 6
+    0b11100000, // 7
+    0b11111110, // 8
+    0b11110110, // 9
+    0b00000010  // '-' or blank
+};
+
+// --- 7-Segment display function ---
+void DisplayDigit(int digit, int value)
+{
+    // Turn off all digits first
+    HAL_GPIO_WritePin(GPIOC, seg_12_Pin | seg_9_Pin | seg_8_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, GPIO_PIN_RESET);
+
+    uint8_t segs = segmentMap[value];
+    HAL_GPIO_WritePin(seg_11_GPIO_Port, seg_11_Pin, (segs & (1 << 7)) ? GPIO_PIN_SET : GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(seg_7_GPIO_Port, seg_7_Pin,   (segs & (1 << 6)) ? GPIO_PIN_SET : GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(seg_4_GPIO_Port, seg_4_Pin,   (segs & (1 << 5)) ? GPIO_PIN_SET : GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(seg_2_GPIO_Port, seg_2_Pin,   (segs & (1 << 4)) ? GPIO_PIN_SET : GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(seg_1_GPIO_Port, seg_1_Pin,   (segs & (1 << 3)) ? GPIO_PIN_SET : GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(seg_10_GPIO_Port, seg_10_Pin, (segs & (1 << 2)) ? GPIO_PIN_SET : GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(seg_5_GPIO_Port, seg_5_Pin,   (segs & (1 << 1)) ? GPIO_PIN_SET : GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(seg_3_GPIO_Port, seg_3_Pin,   (segs & (1 << 0)) ? GPIO_PIN_SET : GPIO_PIN_RESET);
+
+    // Enable the selected digit
+    switch (digit) {
+        case 0: HAL_GPIO_WritePin(seg_12_GPIO_Port, seg_12_Pin, GPIO_PIN_SET); break;
+        case 1: HAL_GPIO_WritePin(seg_9_GPIO_Port,  seg_9_Pin,  GPIO_PIN_SET); break;
+        case 2: HAL_GPIO_WritePin(seg_8_GPIO_Port,  seg_8_Pin,  GPIO_PIN_SET); break;
+        case 3: HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, GPIO_PIN_SET); break; // D4
+    }
+}
+
+// --- Keypad scanning ---
+char read_keypad(void)
+{
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_10, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_SET);
+    HAL_Delay(1);
+
+    #define CHECK_COL(port,pin,val) if(!HAL_GPIO_ReadPin(port,pin)){while(!HAL_GPIO_ReadPin(port,pin));return val;}
+
+    // Row 1
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_RESET);
+    HAL_Delay(1);
+    CHECK_COL(GPIOC, GPIO_PIN_7, '1'); CHECK_COL(GPIOC, GPIO_PIN_6, '2');
+    CHECK_COL(GPIOC, GPIO_PIN_9, '3'); CHECK_COL(GPIOA, GPIO_PIN_7, 'A');
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_SET);
+
+    // Row 2
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_10, GPIO_PIN_RESET);
+    HAL_Delay(1);
+    CHECK_COL(GPIOC, GPIO_PIN_7, '4'); CHECK_COL(GPIOC, GPIO_PIN_6, '5');
+    CHECK_COL(GPIOC, GPIO_PIN_9, '6'); CHECK_COL(GPIOA, GPIO_PIN_7, 'B');
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_10, GPIO_PIN_SET);
+
+    // Row 3
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, GPIO_PIN_RESET);
+    HAL_Delay(1);
+    CHECK_COL(GPIOC, GPIO_PIN_7, '7'); CHECK_COL(GPIOC, GPIO_PIN_6, '8');
+    CHECK_COL(GPIOC, GPIO_PIN_9, '9'); CHECK_COL(GPIOA, GPIO_PIN_7, 'C');
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, GPIO_PIN_SET);
+
+    // Row 4
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_RESET);
+    HAL_Delay(1);
+    CHECK_COL(GPIOC, GPIO_PIN_7, '*'); CHECK_COL(GPIOC, GPIO_PIN_6, '0');
+    CHECK_COL(GPIOC, GPIO_PIN_9, '#'); CHECK_COL(GPIOA, GPIO_PIN_7, 'D');
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_SET);
+
+    return 0;
+}
+
+/* USER CODE END PV */
+
+int main(void)
+{
+  HAL_Init();
+  SystemClock_Config();
+  MX_GPIO_Init();
+  MX_TIM1_Init();
+  HAL_TIM_Base_Start(&htim1);
+
+  /* USER CODE BEGIN 2 */
+  typedef enum {
+      STATE_IDLE,
+      STATE_INPUT,
+      STATE_VERIFY,
+      STATE_SUCCESS,
+      STATE_FAILURE
+  } SystemState;
+
+  SystemState state = STATE_IDLE;
+  char inputBuffer[5] = {0};
+  char passcode[5] = "1234";
+  int inputIndex = 0;
+  char key = 0;
+  /* USER CODE END 2 */
+
+  /* Infinite loop */
+  while (1)
+  {
+      key = read_keypad();
+
+      switch (state)
+      {
+          // ------------------ IDLE ------------------
+          case STATE_IDLE:
+              for (int i = 0; i < 4; i++) {
+                  DisplayDigit(i, 10);
+                  HAL_Delay(2);
+              }
+              if (key == '#') {
+                  inputIndex = 0;
+                  memset(inputBuffer, 0, sizeof(inputBuffer));
+                  state = STATE_INPUT;
+                  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_RESET); // red off
+                  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PIN_RESET); // green off
+              }
+              break;
+
+          // ------------------ INPUT ------------------
+          case STATE_INPUT:
+              if (key >= '0' && key <= '9' && inputIndex < 4) {
+                  inputBuffer[inputIndex++] = key;
+              }
+
+              for (int i = 0; i < 4; i++) {
+                  if (i < inputIndex)
+                      DisplayDigit(i, inputBuffer[i] - '0');
+                  else
+                      DisplayDigit(i, 10);
+                  HAL_Delay(2);
+              }
+
+              if (key == '#' && inputIndex == 4) state = STATE_VERIFY;
+              if (key == '*') inputIndex = 0;
+              break;
+
+          // ------------------ VERIFY ------------------
+          case STATE_VERIFY:
+              if (strncmp(inputBuffer, passcode, 4) == 0)
+                  state = STATE_SUCCESS;
+              else
+                  state = STATE_FAILURE;
+              break;
+
+          // ------------------ SUCCESS ------------------
+          case STATE_SUCCESS:
+              HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PIN_SET);   // green LED ON
+              HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_RESET); // red OFF
+              HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_RESET); // buzzer OFF
+              HAL_Delay(2000);
+              HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PIN_RESET);
+              state = STATE_IDLE;
+              break;
+
+          // ------------------ FAILURE ------------------
+          case STATE_FAILURE:
+              HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_SET); // red LED ON
+              HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_SET); // buzzer ON
+              HAL_Delay(1000);
+              HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_RESET); // buzzer OFF
+              HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_RESET); // red OFF
+              state = STATE_IDLE;
+              break;
+      }
+  }
+}
+
+/* ----------------------- System setup code ----------------------- */
+void SystemClock_Config(void)
+{
+  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE3);
+  while(!__HAL_PWR_GET_FLAG(PWR_FLAG_VOSRDY)) {}
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_CSI;
+  RCC_OscInitStruct.CSIState = RCC_CSI_ON;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLL1_SOURCE_CSI;
+  RCC_OscInitStruct.PLL.PLLM = 1;
+  RCC_OscInitStruct.PLL.PLLN = 36;
+  RCC_OscInitStruct.PLL.PLLP = 2;
+  RCC_OscInitStruct.PLL.PLLQ = 2;
+  RCC_OscInitStruct.PLL.PLLR = 2;
+  HAL_RCC_OscConfig(&RCC_OscInitStruct);
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
+                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2
+                              |RCC_CLOCKTYPE_PCLK3;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
+  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
+  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
+  RCC_ClkInitStruct.APB3CLKDivider = RCC_HCLK_DIV1;
+  HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_3);
+}
+
+static void MX_TIM1_Init(void)
+{
+  htim1.Instance = TIM1;
+  htim1.Init.Prescaler = 72-1;
+  htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim1.Init.Period = 65534;
+  HAL_TIM_Base_Init(&htim1);
+}
+
+static void MX_GPIO_Init(void)
+{
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+  __HAL_RCC_GPIOH_CLK_ENABLE();
+  __HAL_RCC_GPIOC_CLK_ENABLE();
+  __HAL_RCC_GPIOA_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
+
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+
+  // Configure your segment, LED, and buzzer pins here as outputs (as done in CubeMX)
+  // Columns should be INPUT with PULL-UP, Rows as OUTPUT.
+}

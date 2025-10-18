@@ -1,0 +1,59 @@
+#include "libraries.h"
+#include "MATRIX_KEYPAD.h"
+#include "main.h"
+//#include "GPIO.h"
+
+// Rows: PA8, PB10, PB4, PB5
+uint8_t R_POSITIONS[4] = {8, 10, 4, 5};
+GPIO_TypeDef* R_PORTS[4] = {GPIOA, GPIOB, GPIOB, GPIOB};
+
+// Columns: PC7, PC6, PC9, PA7
+uint8_t C_POSITIONS[4] = {7, 6, 9, 7};
+GPIO_TypeDef* C_PORTS[4] = {GPIOC, GPIOC, GPIOC, GPIOA};
+
+char keys[4][4] =
+{
+    {'1', '2', '3', 'A'},
+    {'4', '5', '6', 'B'},
+    {'7', '8', '9', 'C'},
+    {'*', '0', '#', 'D'}
+};
+
+void USER_MATRIX_KEYPAD_Init(void)
+{
+    // Init rows as output, default HIGH
+    for (int i = 0; i < 4; i++) {
+        USER_GPIO_Define(R_PORTS[i], R_POSITIONS[i], OUT_50, OUT_GP_PP);
+        USER_GPIO_Write(R_PORTS[i], R_POSITIONS[i], 1);
+    }
+
+    // Init columns as input pull-up
+    for (int i = 0; i < 4; i++) {
+        USER_GPIO_Define(C_PORTS[i], C_POSITIONS[i], INP, INP_PP);
+        USER_GPIO_Write(C_PORTS[i], C_POSITIONS[i], 1);
+    }
+}
+
+char USER_MATRIX_KEYPAD_Read(void)
+{
+    char selectedKey = 'N';  // Default = No key
+
+    for (uint8_t row = 0; row < 4; row++)
+    {
+        // Drive current row LOW
+        R_PORTS[row]->BSRR = (1 << (R_POSITIONS[row] + 16));
+
+        for (uint8_t col = 0; col < 4; col++)
+        {
+            // If column pin is LOW, key is pressed
+            if (!(C_PORTS[col]->IDR & (1 << C_POSITIONS[col]))) {
+                selectedKey = keys[row][col];
+            }
+        }
+
+        // Set row HIGH again
+        R_PORTS[row]->BSRR = (1 << R_POSITIONS[row]);
+    }
+
+    return selectedKey;
+}

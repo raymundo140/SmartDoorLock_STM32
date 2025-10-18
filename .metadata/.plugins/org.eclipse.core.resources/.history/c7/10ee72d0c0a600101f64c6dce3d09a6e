@@ -1,0 +1,146 @@
+/* Keypad
+* Date: 03/14/2022
+* Modified by (list):
+* Ye gu Kang
+*/
+
+#include <math.h>
+#include <matrix_keypad.h>
+
+
+// Global variables
+int PORTn[8]; //keypad PORT 설정
+int PORTn_LED[8]; //2진수 LED
+int PORTn_lock[2]; // lock, unlock LED
+char keypad;
+int column;
+int row;
+
+int token;
+int password[4];
+
+//초기화 함수
+void init_software(void)
+{
+    PORTn[7]=0;
+    PORTn[6]=0;
+    PORTn[5]=0;
+    PORTn[4]=0;
+    PORTn[3]=0;
+    PORTn[2]=0;
+    PORTn[1]=0;
+    PORTn[0]=0;
+
+    PORTn_LED[7]=0;
+    PORTn_LED[6]=0;
+    PORTn_LED[5]=0;
+    PORTn_LED[4]=0;
+    PORTn_LED[3]=0;
+    PORTn_LED[2]=0;
+    PORTn_LED[1]=0;
+    PORTn_LED[0]=0;
+
+    column = 0;
+    row = 0;
+    keypad=0;
+
+
+    token=0;
+    password[0]=1;
+    password[1]=2;
+    password[2]=3;
+    password[3]=4;
+    PORTn_lock[0]=1;
+    PORTn_lock[1]=0;
+
+
+}
+
+//매 10kHz 마다 돌아가는 프로그램
+void microcontroller(const double * adc, double * dac)
+{
+    // Read inputs
+    PORTn[7] = (int) *(adc);
+    PORTn[6] = (int) *(adc+1);
+    PORTn[5] = (int) *(adc+2);
+    PORTn[4] = (int) *(adc+3);
+    //인풋 연결
+    if (PORTn[7]==1)
+        column=3;
+    if (PORTn[6]==1)
+        column=2;
+    if (PORTn[5]==1)
+        column=1;
+    if (PORTn[4]==1)
+        column=0;
+    if (PORTn[7]==0 && PORTn[6]==0 && PORTn[5]==0 && PORTn[4]==0)
+        column=5;
+
+    //정해진 규칙
+
+
+    if (column==0 && row==0)
+        keypad=1;
+    if (column==1 && row==0)
+        keypad=2;
+    if (column==2 && row==0)
+        keypad=3;
+    if (column==3 && row==0)
+        keypad='A';
+
+//
+//
+
+    if (row==0)
+    {
+        PORTn[3]=0; PORTn[2]=0; PORTn[1]=0; PORTn[0]=1;
+    }
+ //   if (row==1)
+ //   {
+ //       PORTn[3]=0; PORTn[2]=0; PORTn[1]=1; PORTn[0]=0;
+ //   }
+
+
+    PORTn_LED[0]=(keypad&0b00000001);
+    PORTn_LED[1]=(keypad&0b00000010)>>1;
+    PORTn_LED[2]=(keypad&0b00000100)>>2;
+    PORTn_LED[3]=(keypad&0b00001000)>>3;
+    PORTn_LED[4]=(keypad&0b00010000)>>4;
+    PORTn_LED[5]=(keypad&0b00100000)>>5;
+    PORTn_LED[6]=(keypad&0b01000000)>>6;
+    PORTn_LED[7]=(keypad&0b10000000)>>7;;
+
+
+//키패드 도어락 기능
+
+	//도어락 리셑 버튼
+	if(keypad=='*')
+	{
+        PORTn_lock[0]=1;//빨간불
+		PORTn_lock[1]=0;//초록불
+		token=0;
+	}
+
+
+
+    // Write output
+    dac[0] = (int) keypad;
+    dac[1] = (int) PORTn[0];
+    dac[2] = (int) PORTn[1];
+    dac[3] = (int) PORTn[2];
+    dac[4] = (int) PORTn[3];
+
+    dac[5] = (int) PORTn_LED[0];
+    dac[6] = (int) PORTn_LED[1];
+    dac[7] = (int) PORTn_LED[2];
+    dac[8] = (int) PORTn_LED[3];
+    dac[9] = (int) PORTn_LED[4];
+    dac[10] = (int) PORTn_LED[5];
+    dac[11] = (int) PORTn_LED[6];
+    dac[12] = (int) PORTn_LED[7];
+
+    dac[13] = (int) PORTn_lock[0];
+    dac[14] = (int) PORTn_lock[1];
+
+
+}

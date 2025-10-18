@@ -1,0 +1,25 @@
+# STM32CubeIDE / C project ignore rules
+*.o
+*.elf
+*.map
+*.bin
+*.hex
+*.lst
+*.srec
+*.su
+*.d
+*.launch
+*.log
+*.bak
+*.tmp
+*.settings/
+Debug/
+Release/
+build/
+Core/Startup/
+.ipch/
+*.swp
+*.swo
+*.swb
+*.user
+

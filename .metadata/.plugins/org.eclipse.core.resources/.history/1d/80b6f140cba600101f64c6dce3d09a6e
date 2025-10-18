@@ -1,0 +1,18 @@
+#ifndef UART_H_
+#define UART_H_
+
+#include <stdint.h>
+
+// USART selection
+#define USART_1 0
+
+// For 64 MHz clock and 115200 baud rate:
+// USARTDIV = 64MHz / (16 * 115200) = ~34.72
+// Mantissa = 34 = 0x22, Fraction = 0.72 * 16 = ~11 = 0xB → BRR = 0x22B
+#define USARTDIV_64MHZ 0x22B
+
+// Function prototypes
+void USER_USART_Init(uint8_t);
+int _write(int, char*, int);
+
+#endif /* UART_H_ */
